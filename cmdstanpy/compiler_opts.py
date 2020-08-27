@@ -17,6 +17,7 @@ STANC_OPTS = [
     'warn-uninitialized',
     'include_paths',
     'name',
+    'warn-pendantic',
 ]
 
 STANC_IGNORE_OPTS = [

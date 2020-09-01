@@ -1037,7 +1037,6 @@ class CmdStanModel:
         Spawn process, capture console output to file, record returncode.
         """
         cmd = runset.cmds[idx]
-        self._logger.info('start chain %u', idx + 1)
         self._logger.debug(
             'threads: %s', str(os.environ.get('STAN_NUM_THREADS'))
         )
@@ -1045,12 +1044,20 @@ class CmdStanModel:
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ
         )
-        if pbar:
-            stdout_pbar = self._read_progress(proc, pbar, idx)
-        stdout, stderr = proc.communicate()
-        if pbar:
-            stdout = stdout_pbar + stdout
-        self._logger.info('finish chain %u', idx + 1)
+
+        handler = StdoutStreamHandler(
+            pbar=pbar,
+            idx=idx,
+            logger=self._logger,
+        )
+        stdout = b""
+        handler.start()
+        for line in self._stream_stdout(proc):
+            stdout += line
+            handler.update(line)
+        handler.finish()
+
+        _, stderr = proc.communicate()
         if stdout:
             with open(runset.stdout_files[idx], 'w+') as fd:
                 fd.write(stdout.decode('utf-8'))
@@ -1059,60 +1066,72 @@ class CmdStanModel:
                 fd.write(stderr.decode('utf-8'))
         runset._set_retcode(idx, proc.returncode)
 
-    def _read_progress(
-        self, proc: subprocess.Popen, pbar: Any, idx: int
-    ) -> bytes:
-        """
-        Update tqdm progress bars according to CmdStan console progress msgs.
-        Poll process to get CmdStan console outputs,
-        check for output lines that start with 'Iteration: '.
-        NOTE: if CmdStan output messages change, this will break.
-        """
-        pattern = (
-            r'^Iteration\:\s*(\d+)\s*/\s*(\d+)\s*\[\s*\d+%\s*\]\s*\((\S*)\)$'
-        )
-        pattern_compiled = re.compile(pattern, flags=re.IGNORECASE)
-        previous_count = 0
-        stdout = b''
-        changed_description = False  # Changed from 'warmup' to 'sample'
-        pbar.set_description(desc=f'Chain {idx + 1} - warmup', refresh=True)
+    def _stream_stdout(self, proc: subprocess.Popen) -> bytes:
+        while True:
+            line = proc.stdout.readline()
+            yield line
+            if len(line) == 0 and proc.poll() is not None:
+                return
 
+
+class StdoutStreamHandler:
+    pattern = re.compile(
+        r'^Iteration\:\s*(\d+)\s*/\s*(\d+)\s*\[\s*\d+%\s*\]\s*\((\S*)\)$',
+        flags=re.IGNORECASE,
+    )
+
+    def __init__(self, pbar: Any, idx: int, logger: Logger):
+        self.pbar = pbar
+        self.idx = idx
+        self.previous_count = 0
+        self.changed_description = False  # Changed from 'warmup' to 'sample'
+        self.disabled = False
+        self.logger = logger
+
+    def start(self):
+        self._logger.info('start chain %u', idx + 1)
+        if self.pbar is not None:
+            self.pbar.set_description(desc=f'Chain {self.idx + 1} - warmup', refresh=True)
+        return self
+
+    def update(self, output: bytes):
+        output = output.decode('utf-8').strip()
+        self.logger.debug(output)
+        if self.pbar is None or self.disabled:
+            return self
         try:
-            # iterate while process is sampling
-            while proc.poll() is None:
-                output = proc.stdout.readline()
-                stdout += output
-                output = output.decode('utf-8').strip()
-                if output.startswith('Iteration'):
-                    match = re.search(pattern_compiled, output)
-                    if match:
-                        current_count = int(match.group(1))
-                        total_count = int(match.group(2))
+            if output.startswith('Iteration'):
+                match = re.search(self.pattern, output)
+                if match:
+                    current_count = int(match.group(1))
+                    total_count = int(match.group(2))
 
-                        if pbar.total != total_count:
-                            pbar.reset(total=total_count)
+                    if self.pbar.total != total_count:
+                        self.pbar.reset(total=total_count)
 
-                        if (
-                            match.group(3).lower() == 'sampling'
-                            and not changed_description
-                        ):
-                            pbar.set_description(f'Chain {idx + 1} - sample')
-                            changed_description = True
+                    if (
+                        match.group(3).lower() == 'sampling'
+                        and not self.changed_description
+                    ):
+                        self.pbar.set_description(f'Chain {self.idx + 1} - sample')
+                        self.changed_description = True
 
-                        pbar.update(current_count - previous_count)
-                        previous_count = current_count
-
-            pbar.set_description(f'Chain {idx + 1} -   done', refresh=True)
-
-            if 'notebook' in type(pbar).__name__:
-                # In Jupyter make the bar green by closing it
-                pbar.close()
-
+                    self.pbar.update(current_count - self.previous_count)
+                    self.previous_count = current_count
         except Exception as e:  # pylint: disable=broad-except
-            self._logger.warning(
+            self.logger.warning(
                 'Chain %s: Failed to read the progress on the fly. Error: %s',
-                idx,
+                self.idx,
                 repr(e),
             )
+            self.disabled = True
+        return self
 
-        return stdout
+    def finish(self):
+        self._logger.info('finish chain %u', self.idx + 1)
+        if self.pbar is not None:
+            self.pbar.set_description(f'Chain {self.idx + 1} -   done', refresh=True)
+            if 'notebook' in type(self.pbar).__name__:
+                # In Jupyter make the bar green by closing it
+                self.pbar.close()
+        return self

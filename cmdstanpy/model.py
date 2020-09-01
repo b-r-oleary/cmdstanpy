@@ -1037,6 +1037,13 @@ class CmdStanModel:
         Spawn process, capture console output to file, record returncode.
         """
         cmd = runset.cmds[idx]
+
+        handler = StdoutStreamHandler(
+            pbar=pbar,
+            idx=idx,
+            logger=self._logger,
+        ).start()
+
         self._logger.debug(
             'threads: %s', str(os.environ.get('STAN_NUM_THREADS'))
         )
@@ -1045,13 +1052,7 @@ class CmdStanModel:
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ
         )
 
-        handler = StdoutStreamHandler(
-            pbar=pbar,
-            idx=idx,
-            logger=self._logger,
-        )
         stdout = b""
-        handler.start()
         for line in self._stream_stdout(proc):
             stdout += line
             handler.update(line)
@@ -1089,7 +1090,7 @@ class StdoutStreamHandler:
         self.logger = logger
 
     def start(self):
-        self._logger.info('start chain %u', idx + 1)
+        self.logger.info('start chain %u', idx + 1)
         if self.pbar is not None:
             self.pbar.set_description(desc=f'Chain {self.idx + 1} - warmup', refresh=True)
         return self
@@ -1128,7 +1129,7 @@ class StdoutStreamHandler:
         return self
 
     def finish(self):
-        self._logger.info('finish chain %u', self.idx + 1)
+        self.logger.info('finish chain %u', self.idx + 1)
         if self.pbar is not None:
             self.pbar.set_description(f'Chain {self.idx + 1} -   done', refresh=True)
             if 'notebook' in type(self.pbar).__name__:

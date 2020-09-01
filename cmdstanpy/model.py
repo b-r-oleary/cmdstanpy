@@ -1080,7 +1080,7 @@ class StdoutStreamHandler:
         flags=re.IGNORECASE,
     )
 
-    def __init__(self, pbar: Any, idx: int, logger: Logger):
+    def __init__(self, pbar: Any, idx: int, logger: logging.Logger):
         self.pbar = pbar
         self.idx = idx
         self.previous_count = 0

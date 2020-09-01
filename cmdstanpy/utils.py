@@ -789,6 +789,14 @@ def read_rdump_metric(path: str) -> List[int]:
     return list(metric_dict['inv_metric'].shape)
 
 
+def stream_stdout(proc: subprocess.Popen):
+    while True:
+        line = proc.stdout.readline()
+        yield line
+        if len(line) == 0 and proc.poll() is not None:
+            return
+
+
 def do_command(cmd: str, cwd: str = None, logger: logging.Logger = None) -> str:
     """
     Spawn process, print stdout/stderr to console.
@@ -803,14 +811,19 @@ def do_command(cmd: str, cwd: str = None, logger: logging.Logger = None) -> str:
         stderr=subprocess.PIPE,
         env=os.environ,
     )
-    stdout, stderr = proc.communicate()
+    stdout = b""
+    for line in stream_stdout(proc):
+        stdout += line
+        line_cleaned = line.decode('utf-8').strip()
+        if len(line) > 0:
+            logger.debug(line_cleaned)
+
+    _, stderr = proc.communicate()
     if proc.returncode:
         if stderr:
             msg = 'ERROR\n {} '.format(stderr.decode('utf-8').strip())
         raise RuntimeError(msg)
-    if stdout:
-        return stdout.decode('utf-8').strip()
-    return None
+    return stdout.decode('utf-8').strip()
 
 
 def windows_short_path(path: str) -> str:

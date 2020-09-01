@@ -37,6 +37,7 @@ from cmdstanpy.utils import (
     TemporaryCopiedFile,
     get_logger,
     scan_sampler_csv,
+    stream_stdout,
 )
 
 
@@ -1053,7 +1054,7 @@ class CmdStanModel:
         )
 
         stdout = b""
-        for line in self._stream_stdout(proc):
+        for line in stream_stdout(proc):
             stdout += line
             handler.update(line)
         handler.finish()
@@ -1066,13 +1067,6 @@ class CmdStanModel:
             with open(runset.stderr_files[idx], 'w+') as fd:
                 fd.write(stderr.decode('utf-8'))
         runset._set_retcode(idx, proc.returncode)
-
-    def _stream_stdout(self, proc: subprocess.Popen) -> bytes:
-        while True:
-            line = proc.stdout.readline()
-            yield line
-            if len(line) == 0 and proc.poll() is not None:
-                return
 
 
 class StdoutStreamHandler:

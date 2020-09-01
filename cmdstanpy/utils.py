@@ -18,7 +18,7 @@ import shutil
 import tempfile
 import logging
 import sys
-from typing import Dict, TextIO, List, Optional, Union, Tuple
+from typing import Callable, Dict, TextIO, List, Optional, Union, Tuple
 
 import numpy as np
 import pandas as pd
@@ -789,15 +789,28 @@ def read_rdump_metric(path: str) -> List[int]:
     return list(metric_dict['inv_metric'].shape)
 
 
-def stream_stdout(proc: subprocess.Popen):
+def stream_stdout(
+    proc: subprocess.Popen,
+    handlers: Optional[List[Callable[[str], None]]] = None,
+) -> str:
+    stdout = b""
     while True:
         line = proc.stdout.readline()
-        yield line
+        stdout += line
+        if handlers is not None:
+            line_cleaned = line.decode('utf-8').strip()
+            for handler in handlers:
+                handler(line_cleaned)
         if len(line) == 0 and proc.poll() is not None:
-            return
+            return stdout
 
 
-def do_command(cmd: str, cwd: str = None, logger: Optional[logging.Logger] = None) -> str:
+def do_command(
+    cmd: str,
+    cwd: str = None,
+    logger: Optional[logging.Logger] = None,
+    stdout_handlers = Optional[List[Callable[[str], None]]] = None,
+) -> str:
     """
     Spawn process, print stdout/stderr to console.
     Throws RuntimeError on non-zero returncode.
@@ -811,13 +824,7 @@ def do_command(cmd: str, cwd: str = None, logger: Optional[logging.Logger] = Non
         stderr=subprocess.PIPE,
         env=os.environ,
     )
-    stdout = b""
-    for line in stream_stdout(proc):
-        stdout += line
-        line_cleaned = line.decode('utf-8').strip()
-        if len(line_cleaned) > 0 and logger is not None:
-            logger.debug(line_cleaned)
-
+    stdout = stream_stdout(proc, [logger.debug])
     _, stderr = proc.communicate()
     if proc.returncode:
         if stderr:

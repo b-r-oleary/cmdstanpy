@@ -1052,11 +1052,7 @@ class CmdStanModel:
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=os.environ
         )
-
-        stdout = b""
-        for line in stream_stdout(proc):
-            stdout += line
-            handler.update(line)
+        stdout = stream_stdout(proc, [handler])
         handler.finish()
 
         _, stderr = proc.communicate()
@@ -1089,7 +1085,7 @@ class StdoutStreamHandler:
             self.pbar.set_description(desc=f'Chain {self.idx + 1} - warmup', refresh=True)
         return self
 
-    def update(self, output: bytes):
+    def __call__(self, output: bytes):
         output = output.decode('utf-8').strip()
         if len(output) > 0:
             self.logger.debug(output)

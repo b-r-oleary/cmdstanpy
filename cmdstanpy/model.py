@@ -1097,7 +1097,8 @@ class StdoutStreamHandler:
 
     def update(self, output: bytes):
         output = output.decode('utf-8').strip()
-        self.logger.debug(output)
+        if len(output) > 0:
+            self.logger.debug(output)
         if self.pbar is None or self.disabled:
             return self
         try:

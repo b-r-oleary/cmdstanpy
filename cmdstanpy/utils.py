@@ -797,12 +797,12 @@ def stream_stdout(proc: subprocess.Popen):
             return
 
 
-def do_command(cmd: str, cwd: str = None, logger: logging.Logger = None) -> str:
+def do_command(cmd: str, cwd: str = None, logger: Optional[logging.Logger] = None) -> str:
     """
     Spawn process, print stdout/stderr to console.
     Throws RuntimeError on non-zero returncode.
     """
-    if logger:
+    if logger is not None:
         logger.debug('cmd: %s', cmd)
     proc = subprocess.Popen(
         cmd,
@@ -815,7 +815,7 @@ def do_command(cmd: str, cwd: str = None, logger: logging.Logger = None) -> str:
     for line in stream_stdout(proc):
         stdout += line
         line_cleaned = line.decode('utf-8').strip()
-        if len(line) > 0:
+        if len(line) > 0 and logger is not None:
             logger.debug(line_cleaned)
 
     _, stderr = proc.communicate()

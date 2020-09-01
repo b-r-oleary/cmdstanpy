@@ -1090,7 +1090,7 @@ class StdoutStreamHandler:
         self.logger = logger
 
     def start(self):
-        self.logger.info('start chain %u', idx + 1)
+        self.logger.info('start chain %u', self.idx + 1)
         if self.pbar is not None:
             self.pbar.set_description(desc=f'Chain {self.idx + 1} - warmup', refresh=True)
         return self

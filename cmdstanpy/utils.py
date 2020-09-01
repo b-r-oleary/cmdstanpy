@@ -18,7 +18,7 @@ import shutil
 import tempfile
 import logging
 import sys
-from typing import Dict, TextIO, List, Union, Tuple
+from typing import Dict, TextIO, List, Optional, Union, Tuple
 
 import numpy as np
 import pandas as pd

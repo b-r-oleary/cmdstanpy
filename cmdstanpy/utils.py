@@ -815,7 +815,7 @@ def do_command(cmd: str, cwd: str = None, logger: Optional[logging.Logger] = Non
     for line in stream_stdout(proc):
         stdout += line
         line_cleaned = line.decode('utf-8').strip()
-        if len(line) > 0 and logger is not None:
+        if len(line_cleaned) > 0 and logger is not None:
             logger.debug(line_cleaned)
 
     _, stderr = proc.communicate()
